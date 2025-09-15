@@ -1,0 +1,7 @@
+# Ignore everything in data except the .keep file
+data/*
+!data/.keep
+
+# Ignore everything in models except the .keep file
+models/*
+!models/.keep

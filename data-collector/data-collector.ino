@@ -10,7 +10,8 @@ AccelData accelData;    //Sensor data
 GyroData gyroData;
 
 void calibrateImu() {
-  Serial.println("Calibrating IMU. Keep device still!");
+  printSimple("Calibrating.\n Keep still!");
+  Serial.println("Calibrating IMU.   Keep device still!");
   delay(3000);
   IMU.calibrateAccelGyro(&calib);
   Serial.println("Calibration done!");
@@ -30,8 +31,8 @@ void calibrateImu() {
 }
 
 // screen setup
-
 #include <Arduino_GFX_Library.h>
+#include "bsp_cst816.h"
 
 #define PIN_NUM_LCD_SCLK 39
 #define PIN_NUM_LCD_MOSI 38
@@ -40,6 +41,8 @@ void calibrateImu() {
 #define PIN_NUM_LCD_RST -1
 #define PIN_NUM_LCD_CS 45
 #define PIN_NUM_LCD_BL 1
+#define PIN_NUM_TP_SDA 48
+#define PIN_NUM_TP_SCL 47
 
 #define LCD_ROTATION 1
 #define LCD_H_RES 240
@@ -55,6 +58,14 @@ Arduino_GFX *gfx = new Arduino_ST7789(
   bus, PIN_NUM_LCD_RST /* RST */, LCD_ROTATION /* rotation */, true /* IPS */,
   LCD_H_RES /* width */, LCD_V_RES /* height */);
 
+void printSimple(char * msg) {
+  gfx->fillScreen(WHITE);
+  gfx->setCursor(30, 30);
+  gfx->setTextColor(BLACK, WHITE);
+  gfx->setTextSize(3, 3, 1);
+  gfx->println(msg);
+}
+
 
 void setup() {
   Wire.begin(48, 47);
@@ -67,16 +78,11 @@ void setup() {
     Serial.println("gfx->begin() failed!");
     while(true);
   }
-  gfx->fillScreen(WHITE);
 
   pinMode(PIN_NUM_LCD_BL, OUTPUT);
   digitalWrite(PIN_NUM_LCD_BL, HIGH);
 
-  gfx->setCursor(30, 30);
-  gfx->setTextColor(BLACK);
-  gfx->setTextSize(3, 3, 1);
-  gfx->println("Calibrating...");
-
+  printSimple("Calibrating...");
   /*
   gfx->setCursor(random(gfx->width()), random(gfx->height()));
   gfx->setTextColor(random(0xffff), random(0xffff));
@@ -89,136 +95,111 @@ void setup() {
   if (err != 0) {
     Serial.print("Error initializing IMU: ");
     Serial.println(err);
+    printSimple("Error!");
     while (true); // halt
   }
   
 #ifdef PERFORM_CALIBRATION
   calibrateImu();
 #endif
+
+  // Init touch device
+  bsp_touch_init(&Wire, gfx->getRotation(), gfx->width(), gfx->height());
+  //lv_init();
+
+  printSimple("Ready!");
+  delay(1000);
+  printOptions();
 }
 
-unsigned long lastUpdate = 0;
-const unsigned long interval = 2000;
-
-// ===== timing =====
-unsigned long lastFastSample = 0;
-const unsigned long fastSampleMs   = 5;      // continuous fast IMU update
-unsigned long lastSave = 0;
-const unsigned long saveIntervalMs = 2000;   // one reading every 2 seconds
-
-// ===== state =====
-bool running = false;         // toggled by spacebar
-int  currentGesture = 1;      // 1 or 2 (set by keys '1'/'2')
-int  repsG1 = 0, repsG2 = 0;  // 0..30 per gesture
-
-// ===== latest readings (refreshed continuously) =====
-AccelData latestAccel;
-GyroData  latestGyro;
-
-// pretty print one sample (NOT CSV)
-void printSample(unsigned long tMs, int gesture, int repIdx) {
-  Serial.print("t=");
-  Serial.print(tMs);
-  Serial.print(" ms | gesture=");
-  Serial.print(gesture);
-  Serial.print(" | rep=");
-  Serial.print(repIdx);
-
-  Serial.print(" | ax=");
-  Serial.print(latestAccel.accelX);
-  Serial.print(" ay=");
-  Serial.print(latestAccel.accelY);
-  Serial.print(" az=");
-  Serial.print(latestAccel.accelZ);
-
-  Serial.print(" | gx=");
-  Serial.print(latestGyro.gyroX);
-  Serial.print(" gy=");
-  Serial.print(latestGyro.gyroY);
-  Serial.print(" gz=");
-  Serial.print(latestGyro.gyroZ);
-
-  Serial.println();
+void readAndPrintData() {
+  IMU.update();
+  IMU.getAccel(&accelData);
+  Serial.print("#\t");
+  Serial.print(accelData.accelX);
+  Serial.print("\t");
+  Serial.print(accelData.accelY);
+  Serial.print("\t");
+  Serial.print(accelData.accelZ);
+  Serial.print("\t");
+  IMU.getGyro(&gyroData);
+  Serial.print(gyroData.gyroX);
+  Serial.print("\t");
+  Serial.print(gyroData.gyroY);
+  Serial.print("\t");
+  Serial.println(gyroData.gyroZ);
 }
+
+void senseGesture(char * gestureName) {
+  printSimple(gestureName);
+  gfx->setCursor(120, 120);
+  gfx->setTextSize(6, 6, 1);
+  for(int i=3; i>0; i--) {
+    gfx->setCursor(120, 120);
+    gfx->println(String(i));
+    delay(1000);
+  }
+  gfx->setCursor(100, 120);
+  gfx->println("GO!");
+
+  Serial.print("@ ");
+  Serial.println(gestureName);
+  for(int i=0; i<50; i++) {
+    readAndPrintData();
+    delay(20);
+  }
+
+  gfx->setCursor(70, 120);
+  gfx->println("OK :)");
+  delay(2000);
+}
+
+void printOptions() {
+  printSimple(""); // Reset screen
+
+  gfx->setCursor(20, 20);
+  gfx->setTextSize(4, 4, 1);
+  gfx->println("CSV Recorder");
+
+  gfx->setTextSize(3, 3, 1);
+
+  gfx->setCursor(20, 60);
+  gfx->println("Record:");
+
+  gfx->setCursor(40, 110);
+  gfx->println("Gesture 1");
+
+  gfx->setCursor(40, 150);
+  gfx->println("Gesture 2");
+  
+  gfx->setCursor(40, 190);
+  gfx->println("Void gesture");
+}
+
+bool getClick(uint16_t * touchpad_x, uint16_t * touchpad_y) {
+  bsp_touch_read();
+  return bsp_touch_get_coordinates(touchpad_x, touchpad_y);
+}
+
+uint16_t touchpad_x;
+uint16_t touchpad_y;
 
 void loop() {
-  unsigned long now = millis();
+  // Wait for click
+  while(!getClick(&touchpad_x, &touchpad_y));
 
-  // 1) Continuous fast IMU update (non-blocking)
-  if (now - lastFastSample >= fastSampleMs) {
-    lastFastSample = now;
-
-    IMU.update();
-    IMU.getGyro(&latestGyro);
-    IMU.getAccel(&latestAccel);
+  if (touchpad_y > 100 && touchpad_y < 140) {
+    senseGesture("Gesture 1");
+    printOptions();
+  }
+  else if (touchpad_y > 140 && touchpad_y < 180) {
+    senseGesture("Gesture 2");
+    printOptions();
+  }
+  else if (touchpad_y > 180) {
+    senseGesture("Void Gesture");
+    printOptions();
   }
 
-  // 2) Handle serial commands (spacebar, '1', '2')
-  while (Serial.available()) {
-    char c = (char)Serial.read();
-
-    // ignore CR/LF from Serial Monitor line endings
-    if (c == '\r' || c == '\n') continue;
-
-    if (c == ' ') {
-      // toggle run
-      running = !running;
-      if (running) {
-        // on start: reset counters & timers; start with currentGesture
-        if (currentGesture == 1) { repsG1 = 0; }
-        if (currentGesture == 2) { repsG2 = 0; }
-        lastSave = 0; // so first sample occurs within 2s
-        Serial.print("Starting recording gesture ");
-        Serial.println(currentGesture);
-      } else {
-        Serial.println("Stop recording");
-      }
-    } else if (c == '1' || c == '2') {
-      int newG = (c == '1') ? 1 : 2;
-
-      // set gesture anytime
-      bool changed = (newG != currentGesture);
-      currentGesture = newG;
-
-      if (running) {
-        if (changed) {
-          Serial.print("Changed - recording gesture ");
-          Serial.println(currentGesture);
-        } else {
-          // no text if same gesture chosen; comment in if you want:
-          // Serial.print("Already recording gesture "); Serial.println(currentGesture);
-        }
-      } else {
-        // not running: just acknowledge selection
-        // (you asked for messages only while recording, so keep it quiet)
-      }
-    }
-  }
-
-  // 3) Emit one sample every 2s WHILE running, up to 30 per gesture
-  if (running && (now - lastSave >= saveIntervalMs)) {
-    lastSave = now;
-
-    // figure out next rep index for the active gesture
-    int &repCounter = (currentGesture == 1) ? repsG1 : repsG2;
-
-    if (repCounter < 30) {
-      // read fresh data right now for the saved sample
-      IMU.update();
-      IMU.getGyro(&latestGyro);
-      IMU.getAccel(&latestAccel);
-
-      printSample(now, currentGesture, repCounter + 1);
-      repCounter++;
-    }
-
-    // auto-stop if BOTH gestures finished
-    if (repsG1 >= 30 && repsG2 >= 30) {
-      running = false;
-      Serial.println("Stop recording");
-    }
-  }
-
-  // place for other non-blocking tasks
-  // yield();
+  delay(5);
 }

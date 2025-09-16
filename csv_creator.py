@@ -6,8 +6,8 @@ import time
 # Configuration
 PORT = "/dev/ttyACM0"
 BAUD = 115200
-CSV_FILE = f"{int(time.time())}.csv"
-NUM_VALUES = 9 # Number of features of the sensor (we don't care what they are, the NN will do the magic lol)
+CSV_FILE = f"data/{int(time.time())}.csv"
+NUM_VALUES = 6 # Number of features of the sensor (we don't care what they are, the NN will do the magic lol)
 
 def main():
     header = ["gesture_name", "take_number", "seq_num"] + [f"val{i+1}" for i in range(NUM_VALUES)]
@@ -49,7 +49,7 @@ def main():
                     writer.writerow(row)
                     f.flush()  # ensure write to disk
 
-                    if seq_num%50==0: #Do not fill stdout with junk
+                    if seq_num%10==0: #Do not fill stdout with junk
                         print(f"[DATA] {gesture_name} T{take_number} Seq{seq_num}: {values}")
 
                 else:

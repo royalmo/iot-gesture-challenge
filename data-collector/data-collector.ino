@@ -1,50 +1,17 @@
 #include "FastIMU.h"
 #include <Wire.h>
 
-#define IMU_ADDRESS 0x6B    //Change to the address of the IMU
-#define PERFORM_CALIBRATION //Comment to disable startup calibration
-QMI8658 IMU;               //Change to the name of any supported IMU! 
-
-// Currently supported IMUS: MPU9255 MPU9250 MPU6886 MPU6500 MPU6050 ICM20689 ICM20690 BMI055 BMX055 BMI160 LSM6DS3 LSM6DSL QMI8658
+#define IMU_ADDRESS 0x6B
+#define PERFORM_CALIBRATION
+QMI8658 IMU;
 
 calData calib = { 0 };  //Calibration data
 AccelData accelData;    //Sensor data
 GyroData gyroData;
-MagData magData;
 
-void setup() {
-  Wire.begin(48, 47);
-  Wire.setClock(400000); //400khz clock
-  Serial.begin(115200);
-  while (!Serial) {
-    ;
-  }
-
-  int err = IMU.init(calib, IMU_ADDRESS);
-  if (err != 0) {
-    Serial.print("Error initializing IMU: ");
-    Serial.println(err);
-    while (true) {
-      ;
-    }
-  }
-  
-#ifdef PERFORM_CALIBRATION
-  Serial.println("FastIMU calibration & data example");
-  if (IMU.hasMagnetometer()) {
-    delay(1000);
-    Serial.println("Move IMU in figure 8 pattern until done.");
-    delay(3000);
-    IMU.calibrateMag(&calib);
-    Serial.println("Magnetic calibration done!");
-  }
-  else {
-    delay(5000);
-  }
-
-  delay(5000);
-  Serial.println("Keep IMU level.");
-  delay(5000);
+void calibrateImu() {
+  Serial.println("Calibrating IMU. Keep device still!");
+  delay(3000);
   IMU.calibrateAccelGyro(&calib);
   Serial.println("Calibration done!");
   Serial.println("Accel biases X/Y/Z: ");
@@ -59,34 +26,75 @@ void setup() {
   Serial.print(calib.gyroBias[1]);
   Serial.print(", ");
   Serial.println(calib.gyroBias[2]);
-  if (IMU.hasMagnetometer()) {
-    Serial.println("Mag biases X/Y/Z: ");
-    Serial.print(calib.magBias[0]);
-    Serial.print(", ");
-    Serial.print(calib.magBias[1]);
-    Serial.print(", ");
-    Serial.println(calib.magBias[2]);
-    Serial.println("Mag Scale X/Y/Z: ");
-    Serial.print(calib.magScale[0]);
-    Serial.print(", ");
-    Serial.print(calib.magScale[1]);
-    Serial.print(", ");
-    Serial.println(calib.magScale[2]);
-  }
-  delay(5000);
   IMU.init(calib, IMU_ADDRESS);
-#endif
+}
 
-  //err = IMU.setGyroRange(500);      //USE THESE TO SET THE RANGE, IF AN INVALID RANGE IS SET IT WILL RETURN -1
-  //err = IMU.setAccelRange(2);       //THESE TWO SET THE GYRO RANGE TO ±500 DPS AND THE ACCELEROMETER RANGE TO ±2g
-  
-  if (err != 0) {
-    Serial.print("Error Setting range: ");
-    Serial.println(err);
-    while (true) {
-      ;
-    }
+// screen setup
+
+#include <Arduino_GFX_Library.h>
+
+#define PIN_NUM_LCD_SCLK 39
+#define PIN_NUM_LCD_MOSI 38
+#define PIN_NUM_LCD_MISO 40
+#define PIN_NUM_LCD_DC 42
+#define PIN_NUM_LCD_RST -1
+#define PIN_NUM_LCD_CS 45
+#define PIN_NUM_LCD_BL 1
+
+#define LCD_ROTATION 1
+#define LCD_H_RES 240
+#define LCD_V_RES 320
+
+/* More data bus class: https://github.com/moononournation/Arduino_GFX/wiki/Data-Bus-Class */
+Arduino_DataBus *bus = new Arduino_ESP32SPI(
+  PIN_NUM_LCD_DC /* DC */, PIN_NUM_LCD_CS /* CS */,
+  PIN_NUM_LCD_SCLK /* SCK */, PIN_NUM_LCD_MOSI /* MOSI */, PIN_NUM_LCD_MISO /* MISO */);
+
+/* More display class: https://github.com/moononournation/Arduino_GFX/wiki/Display-Class */
+Arduino_GFX *gfx = new Arduino_ST7789(
+  bus, PIN_NUM_LCD_RST /* RST */, LCD_ROTATION /* rotation */, true /* IPS */,
+  LCD_H_RES /* width */, LCD_V_RES /* height */);
+
+
+void setup() {
+  Wire.begin(48, 47);
+  Wire.setClock(400000); //400khz clock
+  Serial.begin(115200);
+
+  // Init Display
+  if (!gfx->begin()) {
+    while (!Serial);
+    Serial.println("gfx->begin() failed!");
+    while(true);
   }
+  gfx->fillScreen(WHITE);
+
+  pinMode(PIN_NUM_LCD_BL, OUTPUT);
+  digitalWrite(PIN_NUM_LCD_BL, HIGH);
+
+  gfx->setCursor(30, 30);
+  gfx->setTextColor(BLACK);
+  gfx->setTextSize(3, 3, 1);
+  gfx->println("Calibrating...");
+
+  /*
+  gfx->setCursor(random(gfx->width()), random(gfx->height()));
+  gfx->setTextColor(random(0xffff), random(0xffff));
+  gfx->setTextSize(random(6), random(6), random(2)); // x scale, y scale, pixel_margin
+  */
+
+  while (!Serial);
+
+  int err = IMU.init(calib, IMU_ADDRESS);
+  if (err != 0) {
+    Serial.print("Error initializing IMU: ");
+    Serial.println(err);
+    while (true); // halt
+  }
+  
+#ifdef PERFORM_CALIBRATION
+  calibrateImu();
+#endif
 }
 
 unsigned long lastUpdate = 0;
@@ -106,9 +114,6 @@ int  repsG1 = 0, repsG2 = 0;  // 0..30 per gesture
 // ===== latest readings (refreshed continuously) =====
 AccelData latestAccel;
 GyroData  latestGyro;
-MagData   latestMag;
-bool      haveMag  = false;
-bool      haveTemp = false;
 
 // pretty print one sample (NOT CSV)
 void printSample(unsigned long tMs, int gesture, int repIdx) {
@@ -133,18 +138,6 @@ void printSample(unsigned long tMs, int gesture, int repIdx) {
   Serial.print(" gz=");
   Serial.print(latestGyro.gyroZ);
 
-  if (haveMag) {
-    Serial.print(" | mx=");
-    Serial.print(latestMag.magX);
-    Serial.print(" my=");
-    Serial.print(latestMag.magY);
-    Serial.print(" mz=");
-    Serial.print(latestMag.magZ);
-  }
-  if (haveTemp) {
-    Serial.print(" | temp=");
-    Serial.print(IMU.getTemp());
-  }
   Serial.println();
 }
 
@@ -158,10 +151,6 @@ void loop() {
     IMU.update();
     IMU.getGyro(&latestGyro);
     IMU.getAccel(&latestAccel);
-
-    haveMag  = IMU.hasMagnetometer();
-    haveTemp = IMU.hasTemperature();
-    if (haveMag) IMU.getMag(&latestMag);
   }
 
   // 2) Handle serial commands (spacebar, '1', '2')
@@ -218,7 +207,6 @@ void loop() {
       IMU.update();
       IMU.getGyro(&latestGyro);
       IMU.getAccel(&latestAccel);
-      if (haveMag) IMU.getMag(&latestMag);
 
       printSample(now, currentGesture, repCounter + 1);
       repCounter++;

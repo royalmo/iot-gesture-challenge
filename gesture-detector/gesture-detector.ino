@@ -1,12 +1,13 @@
-#include "model_data.cc" // obtain it by running: xxd -i models/{MODEL_TIMESTAMP}.tflite > gesture-detector/model_data.cc
+//#include "model_data.cc" // obtain it by running: xxd -i models/{MODEL_TIMESTAMP}.tflite > gesture-detector/model_data.cc
+extern const unsigned char models_20250917_005803_tflite[]; 
+extern const unsigned int  models_20250917_005803_tflite_len;
 #define MODEL_NAME models_20250917_005803_tflite // Update with the variable name stored in model_data.cc
 
-// Install TensorFlowLite "Offline"
-// cd ~/Arduino/libraries <- linux , or cd ~/Documents/Arduino/libraries/ <- windows
-// git clone https://github.com/tensorflow/tflite-micro-arduino-examples Arduino_TensorFlowLite
-// rm -r Arduino_TensorFlowLite/src/peripherals
-#define TENSORFLOW_LITE_MICRO_TOOLS_MAKE_TEMPLATES_TENSORFLOWLITE_H_
-#include <TensorFlowLite.h>
+// Library: ArduTFLite - Version 1.0.2
+//https://github.com/spaziochirale/ArduTFLite
+//https://docs.arduino.cc/libraries/ardutflite/
+
+#include <ArduTFLite.h>
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/system_setup.h"
@@ -80,7 +81,7 @@ Arduino_GFX *gfx = new Arduino_ST7789(
   bus, PIN_NUM_LCD_RST /* RST */, LCD_ROTATION /* rotation */, true /* IPS */,
   LCD_H_RES /* width */, LCD_V_RES /* height */);
 
-void printSimple(char * msg) {
+void printSimple(const char * msg) { //previously was only char
   gfx->fillScreen(WHITE);
   gfx->setCursor(30, 30);
   gfx->setTextColor(BLACK, WHITE);

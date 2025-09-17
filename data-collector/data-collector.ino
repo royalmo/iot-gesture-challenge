@@ -82,7 +82,7 @@ void setup() {
   pinMode(PIN_NUM_LCD_BL, OUTPUT);
   digitalWrite(PIN_NUM_LCD_BL, HIGH);
 
-  printSimple("Calibrating...");
+  printSimple("Starting Serial...");
   /*
   gfx->setCursor(random(gfx->width()), random(gfx->height()));
   gfx->setTextColor(random(0xffff), random(0xffff));
@@ -90,6 +90,7 @@ void setup() {
   */
 
   while (!Serial);
+  printSimple("Starting IMU...");
 
   int err = IMU.init(calib, IMU_ADDRESS);
   if (err != 0) {
@@ -104,12 +105,11 @@ void setup() {
 #endif
 
   // Init touch device
+  printSimple("Starting touch...");
   bsp_touch_init(&Wire, gfx->getRotation(), gfx->width(), gfx->height());
-  //lv_init();
 
   printSimple("Ready!");
   delay(1000);
-  printOptions();
 }
 
 void readAndPrintData() {
@@ -176,30 +176,43 @@ void printOptions() {
   gfx->println("Void gesture");
 }
 
+#define TOUCH_TOLERANCE 20
 bool getClick(uint16_t * touchpad_x, uint16_t * touchpad_y) {
-  bsp_touch_read();
-  return bsp_touch_get_coordinates(touchpad_x, touchpad_y);
+  uint16_t start_touchpad_x, start_touchpad_y;
+  do { // press
+    bsp_touch_read();
+  } while (!bsp_touch_get_coordinates(&start_touchpad_x, &start_touchpad_y));
+  
+  do { // release
+    bsp_touch_read();
+  } while (bsp_touch_get_coordinates(touchpad_x, touchpad_y));
+
+  // consider valid touch if and only if press and release positions are somewhat similar
+  return abs(start_touchpad_x-*touchpad_x) < TOUCH_TOLERANCE && abs(start_touchpad_y-*touchpad_y) < TOUCH_TOLERANCE;
 }
 
 uint16_t touchpad_x;
 uint16_t touchpad_y;
+bool skip_print=false;
 
 void loop() {
+  if (!skip_print)
+    printOptions();
+  skip_print = false;
+
   // Wait for click
   while(!getClick(&touchpad_x, &touchpad_y));
 
   if (touchpad_y > 100 && touchpad_y < 140) {
     senseGesture("Gesture 1");
-    printOptions();
   }
   else if (touchpad_y > 140 && touchpad_y < 180) {
     senseGesture("Gesture 2");
-    printOptions();
   }
   else if (touchpad_y > 180) {
     senseGesture("Void Gesture");
-    printOptions();
   }
-
-  delay(5);
+  else {
+    skip_print = true;
+  }
 }

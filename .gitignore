@@ -5,3 +5,6 @@ data/*
 # Ignore everything in models except the .keep file
 models/*
 !models/.keep
+
+# Exported models are also ignored on version control
+*.cc

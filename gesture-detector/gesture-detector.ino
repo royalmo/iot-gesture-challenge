@@ -1,7 +1,6 @@
-//#include "model_data.cc" // obtain it by running: xxd -i models/{MODEL_TIMESTAMP}.tflite > gesture-detector/model_data.cc
-extern const unsigned char models_20250917_005803_tflite[]; 
-extern const unsigned int  models_20250917_005803_tflite_len;
-#define MODEL_NAME models_20250917_005803_tflite // Update with the variable name stored in model_data.cc
+// obtain model by running: xxd -n model_tflite -i models/TIMESTAMP.tflite > gesture-detector/model_data.cc
+extern const unsigned char model_tflite[]; 
+extern const unsigned int  model_tflite_len;
 
 // Library: ArduTFLite - Version 1.0.2 - Install "Online" with dependency: Chirale_TensorFLowLite@2.0.0
 //https://github.com/spaziochirale/ArduTFLite
@@ -125,7 +124,7 @@ void setup() {
 
   // Init model
   printSimple("Init model...");
-  const tflite::Model* model = tflite::GetModel(MODEL_NAME);
+  const tflite::Model* model = tflite::GetModel(model_tflite);
   if (model->version() != TFLITE_SCHEMA_VERSION) {
     Serial.println("Model schema version mismatch!");
     printSimple("Mod.sch.ver.err!");
@@ -182,7 +181,8 @@ void loop() {
       // Quantize float -> int8 using TFLite input scale/zero_point
       float val = features[j];
       int8_t q = (int8_t)round(val / input->params.scale + input->params.zero_point);
-      input->data.int8[i * 6 + j] = q;
+      //input->data.int8[i * 6 + j] = q;
+      input->data.int8[j * 50 + i] = q;
     }
 
     delay(20);
@@ -196,14 +196,14 @@ void loop() {
   }
 
   // Read output
-  Serial.printf("Outputs[1 2 Void] =\t%d\t%d\t%d\n", output->data.int8[0], output->data.int8[1], output->data.int8[2]);
+  Serial.printf("Outputs[1 2 Void] =\t%d\t%d\t%d\n", output->data.uint8[0], output->data.uint8[1], output->data.uint8[2]);
 
   // Find max
   max_idx = 0;
   for (uint8_t i=1; i<3; i++){
-    if (output->data.int8[max_idx] < output->data.int8[i]) max_idx = i;
+    if (output->data.uint8[max_idx] < output->data.int8[i]) max_idx = i;
   }
-  percent = output->data.int8[max_idx] / 255.0 * 100;
+  percent = output->data.uint8[max_idx] / 255.0 * 100;
 
   // print to screen
   sprintf(percent_buffer, "%d%% ", percent);

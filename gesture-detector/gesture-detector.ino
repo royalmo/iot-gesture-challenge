@@ -3,7 +3,7 @@ extern const unsigned char models_20250917_005803_tflite[];
 extern const unsigned int  models_20250917_005803_tflite_len;
 #define MODEL_NAME models_20250917_005803_tflite // Update with the variable name stored in model_data.cc
 
-// Library: ArduTFLite - Version 1.0.2
+// Library: ArduTFLite - Version 1.0.2 - Install "Online" with dependency: Chirale_TensorFLowLite@2.0.0
 //https://github.com/spaziochirale/ArduTFLite
 //https://docs.arduino.cc/libraries/ardutflite/
 
@@ -156,6 +156,13 @@ void setup() {
   delay(1000);
 }
 
+const char* GESTURE_NAMES[] = {
+  "Gesture 1",
+  "Gesture 2",
+  "Void Gesture"
+};
+uint8_t max_idx, percent;
+char percent_buffer[5];
 
 void loop() {
   // get data for 1sec
@@ -189,11 +196,26 @@ void loop() {
   }
 
   // Read output
-  for (int i = 0; i < output->bytes; i++) {
-    Serial.printf("Output[%d] = %d\n", i, output->data.int8[i]);
+  Serial.printf("Outputs[1 2 Void] =\t%d\t%d\t%d\n", output->data.int8[0], output->data.int8[1], output->data.int8[2]);
+
+  // Find max
+  max_idx = 0;
+  for (uint8_t i=1; i<3; i++){
+    if (output->data.int8[max_idx] < output->data.int8[i]) max_idx = i;
   }
+  percent = output->data.int8[max_idx] / 255.0 * 100;
 
   // print to screen
-  // TODO
-  
+  sprintf(percent_buffer, "%d%% ", percent);
+  gfx->fillScreen(WHITE);
+
+  gfx->setCursor(20, 40);
+  gfx->setTextSize(4, 4, 1);
+  gfx->println(GESTURE_NAMES[max_idx]);
+
+  gfx->setTextSize(3, 3, 1);
+  gfx->setCursor(60, 120);
+  gfx->println("Probability:");
+  gfx->setCursor(130, 170);
+  gfx->println(percent_buffer);  
 }
